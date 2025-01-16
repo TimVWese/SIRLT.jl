@@ -118,15 +118,15 @@ function epi_vertex()
     return ODEVertex(f=(vₙ, v, es, p, t) -> epi_vertex!(vₙ, v, es, p, 3), dim=2, sym=(:s, :o))
 end
 
-function SIR(graph::AbstractGraph)
+function SIR_dynamics(graph::AbstractGraph)
     return network_dynamics(epi_vertex(), IStaticEdge(2), graph)
 end
 
-function SIRLT(graph::AbstractGraph; nl_stoc=false, inf_A=false, parallel=false)
+function SIRLT_dynamics(graph::AbstractGraph; nl_stoc=false, inf_A=false, parallel=false)
     return network_dynamics(bi_vertex(nl_stoc=nl_stoc, inf_A=inf_A), IStaticEdge(2), graph; parallel=parallel)
 end
 
-function SIRLT(g_epi::AbstractGraph, g_opi::AbstractGraph; nl_stoc=false, inf_A=false, parallel=false)
+function SIRLT_dynamics(g_epi::AbstractGraph, g_opi::AbstractGraph; nl_stoc=false, inf_A=false, parallel=false)
     v_f = ds -> bi_vertex(degrees=ds, nl_stoc=nl_stoc, inf_A=inf_A)
     vs, es, gc = combine_graphs(v_f, g_epi, g_opi)
     return network_dynamics(vs, es, gc; parallel=parallel)
@@ -369,12 +369,6 @@ end
 
 ρₛ(sol::ODESolution) = reduce(hcat, [ρₛ(sol[i]) for i in eachindex(sol)])';
 ρₒ(sol::ODESolution) = reduce(hcat, [ρₒ(sol[i]) for i in eachindex(sol)])';
-
-cmₛd = Dict(1 => RGB(0, 0, 1), 2 => RGB(1, 0, 0), 3 => RGB(0, 1, 0), 4 => RGB(0, 0, 0))
-cmₒd = Dict(1 => RGB(0, 1, 0), 2 => RGB(1, 0, 0))
-
-cmₛ = i -> cmₛd[i]
-cmₒ = i -> cmₒd[i]
 
 function epi(sol, t)
     t < 0 ? sol[end][1:2:end] : sol[t][1:2:end]

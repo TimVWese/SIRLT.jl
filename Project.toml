@@ -1,8 +1,15 @@
+name = "SIRLT"
+uuid = "474986b4-aabb-4ef6-8975-82383ece2869"
+authors = ["Tim Van Wesemael <tim.vanwesemael@ugent.be>"]
+version = "0.1.0"
+
 [deps]
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+General = "4a9b9dd9-2c6e-4314-ba98-f01d4608b7e1"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 NetworkDynamics = "22e9dc34-2a0d-11e9-0de0-8588d035468b"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestItemRunner = "f8b46487-2199-4994-9208-9a1283c18c0a"
