@@ -18,8 +18,24 @@ function linearC(es, α)
     return (α * count_states(es, 1, 2) + (1 - α) * count_states(es, 2, 2)) / length(es)
 end
 
+function linearC_positive(es, α)
+    return (α * count_states(es, 1, 2) / length(es)) + ((1 - α) * (count_states(es, 2, 2) + 1) / (length(es) + 1))
+end
+
+function linearC_negative(es, α)
+    return (α * count_states(es, 1, 2) / length(es)) + ((1 - α) * count_states(es, 2, 2) / (length(es) + 1))
+end
+
 function linearC(es, α, d₁, d₂)
     return α * count_states(es, 1, 2) / d₁ + (1 - α) * count_states(es, 2, 2) / d₂
+end
+
+function linearC_positive(es, α, d₁, d₂)
+    return α * count_states(es, 1, 2) / d₁ + (1 - α) * (count_states(es, 2, 2) + 1) / (d₂ + 1)
+end
+
+function linearC_negative(es, α, d₁, d₂)
+    α * count_states(es, 1, 2) / d₁ + (1 - α) * count_states(es, 2, 2) / (d₂ + 1)
 end
 
 function exponentialC(es, α₁, α₂; a=2.4)
@@ -62,39 +78,18 @@ function sis_vertex!(vₙ, v, es, p, t)
     epi_vertex!(vₙ, v, es, p, 1)
 end
 
-function uni_vertex(; degrees=[], nl_stoc=false)
+function sirlt_vertex(; degrees=[], nl_stoc=false, inf_A=false, bias=nothing)
     if nl_stoc
         A = length(degrees) == 2 ?
             (es, p) -> stochasticA(exponentialC(es, p.α, p.α₂, degrees[1], degrees[2])) :
             (es, p) -> stochasticA(exponentialC(es, p.α, p.α₂))
     else
+        C = isnothing(bias) ? linearC :
+            bias ? linearC_positive :
+                   linearC_negative
         A = length(degrees) == 2 ?
-            (es, p) -> deterministicA(linearC(es, p.α, degrees[1], degrees[2]), p.Θ) :
-            (es, p) -> deterministicA(linearC(es, p.α), p.Θ)
-    end
-
-    f = (vₙ, v, es, p, t) -> begin
-        s = v[1]
-
-        if s == 1 && A(es, p)
-            vₙ .= v
-        else
-            sir_vertex!(vₙ, v, es, p, t)
-        end
-    end
-
-    return ODEVertex(f=f, dim=2, sym=(:s, :o))
-end
-
-function bi_vertex(; degrees=[], nl_stoc=false, inf_A=false)
-    if nl_stoc
-        A = length(degrees) == 2 ?
-            (es, p) -> stochasticA(exponentialC(es, p.α, p.α₂, degrees[1], degrees[2])) :
-            (es, p) -> stochasticA(exponentialC(es, p.α, p.α₂))
-    else
-        A = length(degrees) == 2 ?
-            (es, p) -> deterministicA(linearC(es, p.α, degrees[1], degrees[2]), p.Θ) :
-            (es, p) -> deterministicA(linearC(es, p.α), p.Θ)
+            (es, p) -> deterministicA(C(es, p.α, degrees[1], degrees[2]), p.Θ) :
+            (es, p) -> deterministicA(C(es, p.α), p.Θ)
     end
 
     f = (vₙ, v, es, p, t) -> begin
@@ -123,11 +118,23 @@ function SIR_dynamics(graph::AbstractGraph)
 end
 
 function SIRLT_dynamics(graph::AbstractGraph; nl_stoc=false, inf_A=false, parallel=false)
-    return network_dynamics(bi_vertex(nl_stoc=nl_stoc, inf_A=inf_A), IStaticEdge(2), graph; parallel=parallel)
+    return network_dynamics(sirlt_vertex(nl_stoc=nl_stoc, inf_A=inf_A), IStaticEdge(2), graph; parallel=parallel)
+end
+
+function SIRLT_dynamics(graph::AbstractGraph, ω::Real; nl_stoc=false, inf_A=false, parallel=false)
+    v_f = ds -> sirlt_vertex(degrees=ds, nl_stoc=nl_stoc, inf_A=inf_A, bias=(rand() <= ω))
+    vertices = [v_f(degree(g, i)) for i in 1:nv(g)]
+    return network_dynamics(vertices, IStaticEdge(2), graph; parallel=parallel)
 end
 
 function SIRLT_dynamics(g_epi::AbstractGraph, g_opi::AbstractGraph; nl_stoc=false, inf_A=false, parallel=false)
-    v_f = ds -> bi_vertex(degrees=ds, nl_stoc=nl_stoc, inf_A=inf_A)
+    v_f = ds -> sirlt_vertex(degrees=ds, nl_stoc=nl_stoc, inf_A=inf_A)
+    vs, es, gc = combine_graphs(v_f, g_epi, g_opi)
+    return network_dynamics(vs, es, gc; parallel=parallel)
+end
+
+function SIRLT_dynamics(g_epi::AbstractGraph, g_opi::AbstractGraph, ω::Real; nl_stoc=false, inf_A=false, parallel=false)
+    v_f = ds -> sirlt_vertex(degrees=ds, nl_stoc=nl_stoc, inf_A=inf_A, bias=(rand() <= ω))
     vs, es, gc = combine_graphs(v_f, g_epi, g_opi)
     return network_dynamics(vs, es, gc; parallel=parallel)
 end
@@ -202,7 +209,7 @@ function init!(x₀; Θ=0.5, nb_I=1, prop_A=0.5, prerun=false, graph=nothing)
 end
 
 function init(nb_nodes; Θ=0.5, nb_I=1, prop_A=0.5, prerun=false, graph=nothing)
-    x₀ = zeros(Int64, 2*nb_nodes)
+    x₀ = zeros(Int8, 2*nb_nodes)
     init!(x₀; Θ=Θ, nb_I=nb_I, prop_A=prop_A, prerun=prerun, graph=graph)
 
     return x₀
@@ -465,7 +472,7 @@ function infection_event_count(sol, g::AbstractGraph)
             if n_inf == 0
                 continue
             end
-            nbs[n_inf, sol[2*i-1, t]] += 1
+            nbs[n_inf, sol[t][2*i-1]] += 1
         end
     end
 
